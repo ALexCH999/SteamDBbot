@@ -142,10 +142,12 @@ async def track_user(chat_id):
 
 
 # ================== MAIN ==================
-def main():
+import asyncio
+
+async def main():
     if not TOKEN:
         logger.error("BOT_TOKEN is not set")
-        sys.exit(1)
+        raise RuntimeError("BOT_TOKEN is not set")
 
     init_redis()
 
@@ -156,6 +158,8 @@ def main():
                 logger.info("Redis connected")
             except Exception:
                 logger.exception("Redis ping failed")
+        else:
+            logger.info("Redis disabled, using in-memory cache")
 
     app = (
         ApplicationBuilder()
@@ -164,7 +168,7 @@ def main():
         .build()
     )
 
-    # handlers (твои, без изменений)
+    # handlers — БЕЗ ИЗМЕНЕНИЙ
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("lang", lang_cmd))
@@ -174,8 +178,14 @@ def main():
     app.add_handler(CallbackQueryHandler(callbacks))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
 
-    app.run_polling(drop_pending_updates=True)
+    await app.initialize()
+    await app.start()
+
+    logger.info("Bot started and polling")
+
+    # держим процесс живым (Railway этого требует)
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
