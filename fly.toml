@@ -1,0 +1,12 @@
+app = "steamdbbot"
+primary_region = "fra"
+
+[build]
+
+[env]
+  # не добавляй сюда токены, только не секретные настройки
+  MAX_SEARCH_RESULTS = "5"
+  CACHE_TTL = "180"
+
+[[services]]
+  # Telegram polling не требует открытых портов, секция пустая
