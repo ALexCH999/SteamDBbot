@@ -1,0 +1,14 @@
+[project]
+name = "steamdbbot"
+version = "0.1.0"
+description = "SteamDB bot"
+requires-python = ">=3.12"
+dependencies = [
+    "python-telegram-bot==20.6",
+    "requests==2.32.3",
+    "beautifulsoup4==4.12.3",
+    "lxml==4.9.4",
+    "urllib3==2.2.2",
+    "redis==5.0.8",
+    "python-dotenv==1.0.1",
+]

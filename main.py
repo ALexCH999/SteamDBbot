@@ -52,7 +52,16 @@ retries = Retry(
     status_forcelist=[429, 500, 502, 503, 504],
 )
 session.mount("https://", HTTPAdapter(max_retries=retries))
-session.headers.update({"User-Agent": "Mozilla/5.0 (SteamInfoBot)"})
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+})
+
+# SteamDB.io is currently blocked by Cloudflare even with a browser UA, so the
+# steamdb fallback is disabled by default. Re-enable manually if you have a way
+# to bypass Cloudflare (e.g. a worker/proxy with a residential IP).
+STEAMDB_ENABLED = False
 
 # ================== Fallback stores ==================
 _local_cache = {}
@@ -185,7 +194,23 @@ def _get_appdetails_sync(appid: int, lang: str):
     try:
         r = session.get("https://store.steampowered.com/api/appdetails", params={"appids": appid, "cc": cc, "l": lc}, timeout=10)
         r.raise_for_status()
-        payload = r.json().get(str(appid), {})
+        body = r.json()
+        # Steam now returns appdetails keyed by an internal ID, not the
+        # store appid we requested. Find the payload whose data.steam_appid
+        # matches the requested appid.
+        payload = None
+        for key, val in body.items():
+            if isinstance(val, dict):
+                inner = val.get("data") or {}
+                if inner.get("steam_appid") == appid:
+                    payload = val
+                    break
+        if payload is None:
+            # Fall back to old behaviour / first success
+            payload = body.get(str(appid)) or next(
+                (v for v in body.values() if isinstance(v, dict) and v.get("success") and v.get("data")),
+                {},
+            )
         data = payload.get("data", {}) if payload else {}
         return data
     except Exception:
@@ -298,13 +323,15 @@ async def get_peaks(appid: int):
         await cache_set(cache_key, res)
         return res
     
-    sd1 = await asyncio.to_thread(_parse_steamdb_meta_sync, appid, True)
-    if sd1:
-        res = {"24h": sd1[0], "all": sd1[1]}
-        await cache_set(cache_key, res)
-        return res
-    
-    sd2 = await asyncio.to_thread(_parse_steamdb_meta_sync, appid, False)
+    # steamdb is currently disabled (Cloudflare 403); use only steamcharts fallback below
+    if STEAMDB_ENABLED:
+        sd1 = await asyncio.to_thread(_parse_steamdb_meta_sync, appid, True)
+        if sd1:
+            res = {"24h": sd1[0], "all": sd1[1]}
+            await cache_set(cache_key, res)
+            return res
+
+    sd2 = None
     if sd2:
         res = {"24h": sd2[0], "all": sd2[1]}
         await cache_set(cache_key, res)
